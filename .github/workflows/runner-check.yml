@@ -1,0 +1,14 @@
+name: Verify free native runners
+on: workflow_dispatch
+permissions:
+  contents: read
+jobs:
+  native:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-15, macos-15-intel]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 5
+    steps:
+      - run: node -e "console.log('Saral release runner:', process.platform, process.arch)"
