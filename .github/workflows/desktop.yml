@@ -147,6 +147,6 @@ jobs:
           RELEASE_VERSION: ${{ needs.version.outputs.version }}
         shell: bash
         run: |
-          sha256sum packages/*.dmg packages/*.exe > packages/SHA256SUMS.txt
+          sha256sum packages/*.dmg packages/*.exe | sed 's|  packages/|  |' > packages/SHA256SUMS.txt
           python tools/release_manifest.py packages --version "$RELEASE_VERSION"
           gh release create "$RELEASE_TAG" packages/*.dmg packages/*.exe packages/SHA256SUMS.txt packages/release-status.json --repo decodeswapnil/saral-releases --title "Saral $RELEASE_TAG" --prerelease --notes-file RELEASE_NOTES.md
