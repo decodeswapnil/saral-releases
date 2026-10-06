@@ -1,0 +1,88 @@
+name: Windows validation (no publication)
+on:
+  push:
+    branches: [codex/windows-validation]
+    paths: [.github/workflows/windows-validation.yml]
+  workflow_dispatch:
+    inputs:
+      source_ref:
+        description: Private source branch or commit to test (never publishes)
+        required: true
+        default: codex/desktop-comforts
+permissions:
+  contents: read
+concurrency:
+  group: saral-windows-validation
+  cancel-in-progress: false
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    env:
+      HF_HOME: ${{ runner.temp }}/saral-test-models
+      HF_HUB_DISABLE_SYMLINKS_WARNING: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: decodeswapnil/saral
+          ref: ${{ inputs.source_ref || '6e986a00eabcf83a7a7053b8a62b4bca315ed000' }}
+          ssh-key: ${{ secrets.SARAL_SOURCE_DEPLOY_KEY }}
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install test and build dependencies
+        run: python -m pip install -r requirements-dev.txt
+      - name: Install platform-local speech engine
+        run: python tools/install_local_runtime.py
+      - name: Scan source for credentials
+        run: python tools/check_secrets.py
+      - name: Check regressions and real Windows tray, HUD and clipboard
+        run: python -m pytest tests -q --junitxml=build/windows-tests.xml
+      - name: Install native desktop dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Test update and analytics safety
+        run: npm run check:desktop
+      - name: Test native onboarding and recording lifecycle
+        env:
+          PYTHON: python
+        run: node tests/desktop_ui.cjs
+      - name: Build executable and run frozen tray and window checks
+        run: python tools/build.py
+      - name: Scan packaged archive for user data and credentials
+        run: python tools/check_package.py 'dist/desktop/*.zip'
+      - name: Prepare isolated synthetic speech and tiny model
+        shell: pwsh
+        run: |
+          Add-Type -AssemblyName System.Speech
+          $speech = New-Object System.Speech.Synthesis.SpeechSynthesizer
+          try {
+            $speech.SetOutputToWaveFile("$env:RUNNER_TEMP\saral-speech-original.wav")
+            $speech.Speak('The meeting starts on Friday. Please send the report before lunch.')
+          } finally { $speech.Dispose() }
+          & .\dist\desktop\win-unpacked\resources\media\ffmpeg.exe -y -i "$env:RUNNER_TEMP\saral-speech-original.wav" -ar 16000 -ac 1 -c:a pcm_s16le "$env:RUNNER_TEMP\saral-speech.wav"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -c "from huggingface_hub import snapshot_download; snapshot_download('Systran/faster-whisper-tiny', allow_patterns=['config.json','model.bin','tokenizer.json','vocabulary.*','preprocessor_config.json'], max_workers=2)"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Exercise actual packaged engine, setup, offline recognition and reopening
+        shell: pwsh
+        run: |
+          $env:SARAL_PACKAGED_APP = "$env:GITHUB_WORKSPACE\dist\desktop\win-unpacked\Saral.exe"
+          $env:SARAL_TEST_SPEECH = "$env:RUNNER_TEMP\saral-speech.wav"
+          $env:SARAL_TEST_REPORT_DIR = "$env:GITHUB_WORKSPACE\build\windows-evidence"
+          node tests/packaged_windows.cjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Upload synthetic test evidence only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Saral-Windows-validation-evidence
+          retention-days: 7
+          path: |
+            build/windows-tests.xml
+            build/package-smoke.json
+            build/windows-evidence/
+          if-no-files-found: warn
