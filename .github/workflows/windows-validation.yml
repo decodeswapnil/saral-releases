@@ -27,7 +27,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: decodeswapnil/saral
-          ref: ${{ inputs.source_ref || '6e986a00eabcf83a7a7053b8a62b4bca315ed000' }}
+          ref: ${{ inputs.source_ref || '628a43ed457ec21a8c71933c212238b16756c4aa' }}
           ssh-key: ${{ secrets.SARAL_SOURCE_DEPLOY_KEY }}
           persist-credentials: false
       - uses: actions/setup-python@v5
