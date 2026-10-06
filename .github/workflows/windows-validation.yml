@@ -19,9 +19,11 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 45
     env:
-      HF_HOME: ${{ runner.temp }}/saral-test-models
       HF_HUB_DISABLE_SYMLINKS_WARNING: '1'
     steps:
+      - name: Isolate downloaded test models
+        shell: pwsh
+        run: '"HF_HOME=$env:RUNNER_TEMP\saral-test-models" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append'
       - uses: actions/checkout@v4
         with:
           repository: decodeswapnil/saral
