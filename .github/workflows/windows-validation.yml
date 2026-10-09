@@ -27,7 +27,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: decodeswapnil/saral
-          ref: ${{ inputs.source_ref || '628a43ed457ec21a8c71933c212238b16756c4aa' }}
+          ref: ${{ inputs.source_ref || 'codex/desktop-comforts' }}
           ssh-key: ${{ secrets.SARAL_SOURCE_DEPLOY_KEY }}
           persist-credentials: false
       - uses: actions/setup-python@v5
@@ -64,16 +64,21 @@ jobs:
           try {
             $speech.SetOutputToWaveFile("$env:RUNNER_TEMP\saral-speech-original.wav")
             $speech.Speak('The meeting starts on Friday. Please send the report before lunch.')
+            $speech.SetOutputToWaveFile("$env:RUNNER_TEMP\saral-second-original.wav")
+            $speech.Speak('The second recording is about the budget. We will review the budget on Monday.')
           } finally { $speech.Dispose() }
           & .\dist\desktop\win-unpacked\resources\media\ffmpeg.exe -y -i "$env:RUNNER_TEMP\saral-speech-original.wav" -ar 16000 -ac 1 -c:a pcm_s16le "$env:RUNNER_TEMP\saral-speech.wav"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python -c "from huggingface_hub import snapshot_download; snapshot_download('Systran/faster-whisper-tiny', allow_patterns=['config.json','model.bin','tokenizer.json','vocabulary.*','preprocessor_config.json'], max_workers=2)"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & .\dist\desktop\win-unpacked\resources\media\ffmpeg.exe -y -i "$env:RUNNER_TEMP\saral-second-original.wav" -ar 16000 -ac 1 -c:a pcm_s16le "$env:RUNNER_TEMP\saral-second.wav"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Exercise actual packaged engine, setup, offline recognition and reopening
         shell: pwsh
         run: |
           $env:SARAL_PACKAGED_APP = "$env:GITHUB_WORKSPACE\dist\desktop\win-unpacked\Saral.exe"
           $env:SARAL_TEST_SPEECH = "$env:RUNNER_TEMP\saral-speech.wav"
+          $env:SARAL_TEST_SECOND_SPEECH = "$env:RUNNER_TEMP\saral-second.wav"
           $env:SARAL_TEST_REPORT_DIR = "$env:GITHUB_WORKSPACE\build\windows-evidence"
           node tests/packaged_windows.cjs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
