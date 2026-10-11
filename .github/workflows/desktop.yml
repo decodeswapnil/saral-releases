@@ -4,7 +4,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: saral-refined-preview
+  group: saral-polished-preview
   cancel-in-progress: false
 jobs:
   desktop:
@@ -24,7 +24,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: decodeswapnil/saral
-          ref: 5ea46b276eaa73cd904196056311b35d6d3eacc8
+          ref: ef7a07f291f85d3f0d0c370fdb03d2a459694b73
           ssh-key: ${{ secrets.SARAL_SOURCE_DEPLOY_KEY }}
           persist-credentials: false
       - uses: actions/setup-python@v5
@@ -46,11 +46,11 @@ jobs:
           PYTHON: python
         run: node tests/desktop_ui.cjs
       - name: Build separate comparison installers
-        run: python tools/build_studio_preview.py --installers
+        run: python tools/build_studio_preview.py --installers --name "Saral Polished Preview" --app-id com.decodeswapnil.saral.polished.preview
       - run: python tools/check_package.py dist/studio-preview/*.zip
       - uses: actions/upload-artifact@v4
         with:
-          name: Saral-Refined-Preview-${{ matrix.artifact }}
+          name: Saral-Polished-Preview-${{ matrix.artifact }}
           path: |
             dist/studio-preview/*.zip
             dist/studio-preview/*.dmg
