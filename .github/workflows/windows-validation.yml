@@ -82,6 +82,15 @@ jobs:
           $env:SARAL_TEST_REPORT_DIR = "$env:GITHUB_WORKSPACE\build\windows-evidence"
           node tests/packaged_windows.cjs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Upload PC test installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: Saral-Windows-PC-test-installer
+          retention-days: 7
+          path: |
+            dist/desktop/*.exe
+            dist/desktop/*SHA256SUMS.txt
+          if-no-files-found: error
       - name: Upload synthetic test evidence only
         if: always()
         uses: actions/upload-artifact@v4
