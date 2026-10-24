@@ -9,7 +9,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: saral-connected-validation
+  group: saral-connected-${{ inputs.source_ref }}
   cancel-in-progress: false
 jobs:
   desktop:
