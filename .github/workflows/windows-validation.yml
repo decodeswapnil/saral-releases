@@ -27,8 +27,9 @@ jobs:
     timeout-minutes: 60
     env:
       HF_HUB_DISABLE_SYMLINKS_WARNING: '1'
-      HF_HOME: ${{ runner.temp }}/saral-test-models
     steps:
+      - name: Isolate downloaded test models
+        run: python -c "import os; open(os.environ['GITHUB_ENV'], 'a', encoding='utf8').write('HF_HOME='+os.path.join(os.environ['RUNNER_TEMP'], 'saral-test-models')+'\n')"
       - uses: actions/checkout@v4
         with:
           repository: decodeswapnil/saral
