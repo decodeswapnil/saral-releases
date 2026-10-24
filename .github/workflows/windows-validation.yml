@@ -1,4 +1,4 @@
-name: Windows validation (no publication)
+name: Connected desktop validation (no publication)
 on:
   workflow_dispatch:
     inputs:
@@ -9,18 +9,26 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: saral-windows-validation
+  group: saral-connected-validation
   cancel-in-progress: false
 jobs:
-  windows:
-    runs-on: windows-latest
-    timeout-minutes: 45
+  desktop:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            artifact: windows-x64
+          - os: macos-15
+            artifact: macos-arm64
+          - os: macos-15-intel
+            artifact: macos-x64
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
     env:
       HF_HUB_DISABLE_SYMLINKS_WARNING: '1'
+      HF_HOME: ${{ runner.temp }}/saral-test-models
     steps:
-      - name: Isolate downloaded test models
-        shell: pwsh
-        run: '"HF_HOME=$env:RUNNER_TEMP\saral-test-models" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append'
       - uses: actions/checkout@v4
         with:
           repository: decodeswapnil/saral
@@ -49,11 +57,19 @@ jobs:
         env:
           PYTHON: python
         run: node tests/desktop_ui.cjs
-      - name: Build executable and run frozen tray and window checks
+      - name: Build Windows executable and frozen runtime checks
+        if: runner.os == 'Windows'
         run: python tools/build.py
+      - name: Build Mac with the existing community signing identity
+        if: runner.os == 'macOS'
+        env:
+          SARAL_COMMUNITY_P12: ${{ secrets.SARAL_COMMUNITY_P12 }}
+          SARAL_COMMUNITY_PASSWORD: ${{ secrets.SARAL_COMMUNITY_PASSWORD }}
+        run: python tools/community_signing.py build
       - name: Scan packaged archive for user data and credentials
         run: python tools/check_package.py 'dist/desktop/*.zip'
       - name: Prepare isolated synthetic speech and tiny model
+        if: runner.os == 'Windows'
         shell: pwsh
         run: |
           Add-Type -AssemblyName System.Speech
@@ -71,24 +87,27 @@ jobs:
           & .\dist\desktop\win-unpacked\resources\media\ffmpeg.exe -y -i "$env:RUNNER_TEMP\saral-second-original.wav" -ar 16000 -ac 1 -c:a pcm_s16le "$env:RUNNER_TEMP\saral-second.wav"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Install EXE and test offline speech, saved work and eight cold starts
+        if: runner.os == 'Windows'
         shell: pwsh
         run: |
           & ./tools/validate_windows_install.ps1
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-      - name: Upload PC test installer
+      - name: Upload connected test installers
         uses: actions/upload-artifact@v4
         with:
-          name: Saral-Windows-PC-test-installer
+          name: Saral-connected-${{ matrix.artifact }}
           retention-days: 7
           path: |
             dist/desktop/*.exe
+            dist/desktop/*.dmg
+            dist/desktop/*.zip
             dist/desktop/*SHA256SUMS.txt
           if-no-files-found: error
       - name: Upload synthetic test evidence only
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: Saral-Windows-validation-evidence
+          name: Saral-evidence-${{ matrix.artifact }}
           retention-days: 7
           path: |
             build/windows-tests.xml
