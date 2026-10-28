@@ -1,0 +1,39 @@
+name: Keyboard mapping validation (no publication)
+on:
+  workflow_dispatch:
+    inputs:
+      source_ref:
+        description: Private source commit to test
+        required: true
+        default: main
+permissions:
+  contents: read
+jobs:
+  keyboard:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-15]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: decodeswapnil/saral
+          ref: ${{ inputs.source_ref }}
+          ssh-key: ${{ secrets.SARAL_SOURCE_DEPLOY_KEY }}
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install test dependencies
+        run: python -m pip install -r requirements-dev.txt
+      - name: Check mapping, saved settings, hold and toggle dispatch, and native Windows hooks
+        run: python -m pytest tests/test_shortcuts.py tests/test_listener.py tests/test_questions.py tests/test_pdf_refinements.py tests/test_api.py tests/test_windows_shortcuts_native.py -q --junitxml=build/keyboard-tests.xml
+      - name: Upload test evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Keyboard-validation-${{ matrix.os }}
+          path: build/keyboard-tests.xml
+          if-no-files-found: warn
