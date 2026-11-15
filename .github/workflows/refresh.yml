@@ -38,6 +38,11 @@ jobs:
           tag='v'+version
           release=json.loads(subprocess.check_output(['gh','release','view',tag,'--repo','decodeswapnil/saral-releases','--json','isDraft,tagName'],text=True))
           if release['isDraft'] or release['tagName']!=tag:raise SystemExit('Select an existing published release')
+          # Older versions stay without installers: only the newest release can be refreshed.
+          listing=json.loads(subprocess.check_output(['gh','api','repos/decodeswapnil/saral-releases/releases?per_page=100'],text=True))
+          number=lambda value:tuple(map(int,value[1:].split('.')))
+          published=[r['tag_name'] for r in listing if not r.get('draft') and re.fullmatch(r'v\d+\.\d+\.\d+',r['tag_name'])]
+          if published and number(tag)<max(map(number,published)):raise SystemExit('Only the newest release can be refreshed')
           with open(os.environ['GITHUB_OUTPUT'],'a') as output:output.write(f'tag={tag}\nversion={version}\nsource_sha={sha}\n')
           print('Refresh '+tag+' from '+sha)
           PYTHON
@@ -102,7 +107,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: Saral-refresh-${{ matrix.artifact }}
-          retention-days: 7
+          retention-days: 1
           path: |
             dist/desktop/*.dmg
             dist/desktop/*.exe
@@ -113,6 +118,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      actions: write
     steps:
       - uses: actions/checkout@v4
         with:
@@ -136,3 +142,12 @@ jobs:
           python tools/release_manifest.py packages --version "$RELEASE_VERSION"
           gh release upload "$RELEASE_TAG" packages/*.dmg packages/*.exe packages/SHA256SUMS.txt packages/release-status.json --clobber --repo decodeswapnil/saral-releases
           gh release edit "$RELEASE_TAG" --repo decodeswapnil/saral-releases --notes-file RELEASE_NOTES.md
+      - name: Delete this run's build files
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          for id in $(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/artifacts" --jq '.artifacts[].id'); do
+            gh api -X DELETE "repos/$GITHUB_REPOSITORY/actions/artifacts/$id" || true
+          done

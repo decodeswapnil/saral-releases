@@ -51,6 +51,13 @@ jobs:
           except urllib.error.HTTPError as error:
               if error.code!=404:raise
               build=True
+          # Only the newest version is offered: never publish one older than what is out.
+          listing=urllib.request.Request('https://api.github.com/repos/decodeswapnil/saral-releases/releases?per_page=100',headers={'Authorization':'Bearer '+os.environ['GH_TOKEN'],'Accept':'application/vnd.github+json'})
+          with urllib.request.urlopen(listing) as response:published=[r['tag_name'] for r in json.load(response) if not r.get('draft') and re.fullmatch(r'v\d+\.\d+\.\d+',r['tag_name'])]
+          number=lambda value:tuple(map(int,value[1:].split('.')))
+          if build and published and number(tag)<max(map(number,published)):
+              print('Not built: '+tag+' is older than the newest published release')
+              build=False
           with open(os.environ['GITHUB_OUTPUT'],'a') as output:
               output.write(f'tag={tag}\nversion={tag[1:]}\nbuild={str(build).lower()}\n')
           print('New release selected: '+tag if build else 'Already published: '+tag)
@@ -117,7 +124,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: Saral-build-${{ matrix.artifact }}
-          retention-days: 7
+          retention-days: 1
           path: |
             dist/desktop/*.dmg
             dist/desktop/*.exe
@@ -128,6 +135,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      actions: write
     steps:
       - uses: actions/checkout@v4
         with:
@@ -154,3 +162,18 @@ jobs:
           if test -f "$guide"; then
             gh release upload "$RELEASE_TAG" "$guide" --repo decodeswapnil/saral-releases
           fi
+      - name: Remove older installers once the update service offers this version
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_VERSION: ${{ needs.version.outputs.version }}
+        run: python tools/prune_releases.py --keep "$RELEASE_VERSION" --wait-for https://updates.heysaral.com/release-status.json
+      - name: Delete this run's build files
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          for id in $(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/artifacts" --jq '.artifacts[].id'); do
+            gh api -X DELETE "repos/$GITHUB_REPOSITORY/actions/artifacts/$id" || true
+          done
